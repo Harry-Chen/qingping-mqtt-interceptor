@@ -4,7 +4,7 @@ Tool to parse data from MQTT traffic of [Qingping Air Monitor](https://www.qingp
 
 There are several ways to get data from the monitor:
 
-1. The monitor publishes data via (clear text) MQTT. However the interval cannot be controlled user.
+1. The monitor publishes data via (clear text) MQTT. However the interval (normally 15 minutes) cannot be controlled by user.
 2. Poll HTTP API (used by Qingping+ App) to fetch the latest data. However it requires HTTPS MITM.
 3. Connect the monitor to MIJIA and use miIO protocol to access the device.
 

@@ -35,7 +35,7 @@ struct MqttPayload {
 
 fn process_payload(measurement: &str, payload: &[u8]) -> Result<String> {
     let d: MqttPayload = serde_json::from_slice(payload)?;
-    println!("Got payload: {:?}", d);
+    eprintln!("Got payload: {:?}", d);
     if d.sensor_data.is_none() {
         return Err(anyhow::anyhow!("No sensor data"));
     }
@@ -45,10 +45,10 @@ fn process_payload(measurement: &str, payload: &[u8]) -> Result<String> {
         None => String::from("UNKNOWN")
     };
     let timestamp = match d.timestamp {
-        Some(t) => t * 1000, // convert to nanoseconds
+        Some(t) => t * 1000000000, // convert to nanoseconds
         None => std::time::Instant::now().elapsed().as_nanos() as u64
     };
-    println!("Timestamp {:?} device MAC {:?}", d.timestamp, mac);
+    eprintln!("Timestamp {:?} device MAC {:?}", d.timestamp, mac);
     
     let mut result = format!("{},mac={} ", measurement, mac);
     let mut fields = Vec::new();
@@ -65,7 +65,7 @@ fn process_payload(measurement: &str, payload: &[u8]) -> Result<String> {
             }
             Some(s) => {
                 // what are these?
-                println!("Unknown status value {}", s);
+                eprintln!("Unknown status value {}", s);
             }
             None => {}
         }
@@ -90,7 +90,7 @@ fn main() -> Result<()> {
         panic!("no device available");
     }
     let device = devices.remove(0);
-    println!("Using device {}", device.name);
+    eprintln!("Using device {}", device.name);
 
     let mut cap = pcap::Capture::from_device(device)
         .expect("cannot setup capture")
@@ -106,31 +106,31 @@ fn main() -> Result<()> {
             continue
         }
         let payload = &packet.data[66..plen];
-        println!("Got packet with length {:?} payload {:?}", packet.header.caplen, payload);
+        eprintln!("Got packet with length {:?} payload {:?}", packet.header.caplen, payload);
         match mqttrs::decode_slice(payload) {
             Ok(packet) => {
                 match packet {
                     Some(mqttrs::Packet::Publish(p)) => {
-                        println!("Got MQTT Publish Packet: {:?}", p);
+                        eprintln!("Got MQTT Publish Packet: {:?}", p);
                         match process_payload(&config.measurement, p.payload) {
                             Ok(s) => {
-                                println!("InfluxDB Line Protocol: {:?}", s);
+                                println!("{}", s);
                             }
                             Err(e) => {
-                                println!("Cannot process MQTT Publish Packet: {:?}", e);
+                                eprintln!("Cannot process MQTT Publish Packet: {:?}", e);
                             }
                         }
                     }
                     Some(p) => {
-                        println!("Ignore MQTT Packet: {:?}", p);
+                        eprintln!("Ignore MQTT Packet: {:?}", p);
                     }
                     None => {
-                        println!("Incomplete MQTT Packet.");
+                        eprintln!("Incomplete MQTT Packet.");
                     }
                 }
             }
             Err(e) => {
-                println!("Cannot parse MQTT packet: {:?}", e);
+                eprintln!("Cannot parse MQTT packet: {:?}", e);
             }
         }
     }
