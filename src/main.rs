@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use envconfig::Envconfig;
 use serde::Deserialize;
 use anyhow::Result;
+use log::{debug, info, warn};
 
 use qingping_mqtt_interceptor::FixHeaderCodec;
 
@@ -36,7 +37,7 @@ struct MqttPayload {
 
 fn process_payload(measurement: &str, payload: &[u8]) -> Result<String> {
     let d: MqttPayload = serde_json::from_slice(payload)?;
-    eprintln!("Got payload: {:?}", d);
+    debug!("Got JSON payload: {:?}", d);
     if d.sensor_data.is_none() {
         return Err(anyhow::anyhow!("No sensor data"));
     }
@@ -49,7 +50,7 @@ fn process_payload(measurement: &str, payload: &[u8]) -> Result<String> {
         Some(t) => t * 1000000000, // convert to nanoseconds
         None => std::time::Instant::now().elapsed().as_nanos() as u64
     };
-    eprintln!("Timestamp {:?} device MAC {:?}", d.timestamp, mac);
+    info!("Valid MQTT update with timestamp {:?} device MAC {}", d.timestamp, mac);
     
     let mut result = format!("{},mac={} ", measurement, mac);
     let mut fields = Vec::new();
@@ -66,7 +67,7 @@ fn process_payload(measurement: &str, payload: &[u8]) -> Result<String> {
             }
             Some(s) => {
                 // what are these?
-                eprintln!("Unknown status value {}", s);
+                warn!("Unknown status value {}", s);
             }
             None => {}
         }
@@ -76,12 +77,14 @@ fn process_payload(measurement: &str, payload: &[u8]) -> Result<String> {
     result += " ";
     result += &timestamp.to_string();
 
+    info!("Result: {}", result);
     Ok(result)
 }
 
 
 fn main() -> Result<()> {
 
+    env_logger::init();
     let config = Config::init_from_env()?;
 
     let mut devices = pcap::Device::list()
@@ -91,7 +94,7 @@ fn main() -> Result<()> {
         panic!("no device available");
     }
     let device = devices.remove(0);
-    eprintln!("Using device {}", device.name);
+    info!("Using device {}", device.name);
 
     let mut cap = pcap::Capture::from_device(device)
         .expect("cannot setup capture")
@@ -109,31 +112,31 @@ fn main() -> Result<()> {
             continue
         }
         let payload = &packet.data[66..plen];
-        eprintln!("Got packet with length {:?}", packet.header.caplen);
+        debug!("Got packet with length {:?}", packet.header.caplen);
         match mqttrs::decode_slice(payload) {
             Ok(packet) => {
                 match packet {
                     Some(mqttrs::Packet::Publish(p)) => {
-                        eprintln!("Got MQTT Publish Packet: {:?}", p);
+                        debug!("Got MQTT Publish Packet with topic {}", p.topic_name);
                         match process_payload(&config.measurement, p.payload) {
                             Ok(s) => {
                                 println!("{}", s);
                             }
                             Err(e) => {
-                                eprintln!("Cannot process MQTT Publish Packet: {:?}", e);
+                                warn!("Cannot process MQTT Publish Packet: {:?}", e);
                             }
                         }
                     }
                     Some(p) => {
-                        eprintln!("Ignore MQTT Packet: {:?}", p);
+                        debug!("Ignore MQTT Packet: {:?}", p);
                     }
                     None => {
-                        eprintln!("Incomplete MQTT Packet.");
+                        debug!("Incomplete MQTT Packet.");
                     }
                 }
             }
             Err(e) => {
-                eprintln!("Cannot parse MQTT packet: {:?}", e);
+                debug!("Cannot parse MQTT packet: {:?}", e);
             }
         }
     }
