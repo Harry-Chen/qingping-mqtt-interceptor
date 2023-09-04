@@ -4,6 +4,7 @@ use envconfig::Envconfig;
 use serde::Deserialize;
 use anyhow::Result;
 
+use qingping_mqtt_interceptor::FixHeaderCodec;
 
 #[derive(Envconfig)]
 struct Config {
@@ -94,19 +95,21 @@ fn main() -> Result<()> {
 
     let mut cap = pcap::Capture::from_device(device)
         .expect("cannot setup capture")
+        .timeout(0)
         .immediate_mode(true)
         .open()
         .expect("cannot open capture");
 
     cap.filter(config.pcap_filter.as_str(), true).expect("set filter failed");
 
-    while let Ok(packet) = cap.next_packet() {
-        let plen = packet.header.caplen.min(1514) as usize; // workaround if libpcap gives wrong size
+    for p in cap.iter(FixHeaderCodec) {
+        let packet = p.expect("cannot get packet");
+        let plen = packet.header.caplen as usize;
         if plen <= 66 {
             continue
         }
         let payload = &packet.data[66..plen];
-        eprintln!("Got packet with length {:?} payload {:?}", packet.header.caplen, payload);
+        eprintln!("Got packet with length {:?}", packet.header.caplen);
         match mqttrs::decode_slice(payload) {
             Ok(packet) => {
                 match packet {
