@@ -1,6 +1,7 @@
 use envconfig::Envconfig;
 use anyhow::Result;
-use log::{debug, info, warn};
+use etherparse::TransportSlice::Tcp;
+use log::{debug, info, warn, trace};
 use qingping_mqtt_interceptor::fix_packet;
 
 mod payload;
@@ -16,7 +17,6 @@ struct Config {
     #[envconfig(from = "MEASUREMENT", default = "qingping")]
     pub measurement: String,
 }
-
 
 fn main() -> Result<()> {
 
@@ -43,17 +43,32 @@ fn main() -> Result<()> {
 
     while let Ok(p) = cap.next_packet() {
         let packet = fix_packet(p);
-        let plen = packet.header.caplen as usize;
-        if plen <= 66 {
+
+        let Ok(parsed_packet) = etherparse::SlicedPacket::from_ethernet(&packet.data) else {
+            trace!("Packet cannot be parsed as ethernet packet");
+            continue
+        };
+
+        let Some(Tcp(_)) = parsed_packet.transport else {
+            trace!("Packet is not TCP");
+            continue
+        };
+
+        let payload = parsed_packet.payload;
+
+        if payload.len() == 0 {
+            trace!("Packet has no payload");
             continue
         }
-        let payload = &packet.data[66..plen];
-        debug!("Got packet with length {:?}", packet.header.caplen);
+
+        debug!("Got packet with payload length {:?}", payload.len());
+
         match mqttrs::decode_slice(payload) {
             Ok(packet) => {
                 match packet {
                     Some(mqttrs::Packet::Publish(p)) => {
                         debug!("Got MQTT Publish Packet with topic {}", p.topic_name);
+                        
                         match payload::process_payload(&config.measurement, p.payload) {
                             Ok(s) => {
                                 println!("{}", s);
@@ -67,12 +82,12 @@ fn main() -> Result<()> {
                         debug!("Ignore MQTT Packet: {:?}", p);
                     }
                     None => {
-                        debug!("Incomplete MQTT Packet.");
+                        trace!("Incomplete MQTT Packet.");
                     }
                 }
             }
             Err(e) => {
-                debug!("Cannot parse MQTT packet: {:?}", e);
+                trace!("Cannot parse as MQTT packet: {:?}", e);
             }
         }
     }
