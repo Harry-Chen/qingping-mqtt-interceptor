@@ -1,4 +1,3 @@
-//! Example of using iterators that print paquet
 use pcap::Capture;
 use qingping_mqtt_interceptor::FixHeaderCodec;
 use std::error;
@@ -16,6 +15,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         let packet = packet?;
         println!("{:?}", packet.header);
     }
+
+    // while let Ok(packet) = cap.next_packet() {
+    //     let packet = fix_packet(packet);
+    //     println!("{:?} {:?}", packet.header.caplen, &packet.data.len());
+    //     // break;
+    // }
 
     Ok(())
 }
