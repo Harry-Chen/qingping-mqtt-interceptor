@@ -1,5 +1,7 @@
 # Qingping MQTT Interceptor
 
+**Note: This is a toy project, please use [qingping-api-influxdb-forwarder](https://github.com/Harry-Chen/qingping-api-influxdb-forwarder) instead.**
+
 Tool to parse data from MQTT traffic of [Qingping Air Monitor](https://www.qingping.co/air-monitor/overview), and print in InfluxDB line protocol.
 
 There are several ways to get data from the monitor:
